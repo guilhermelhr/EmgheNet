@@ -11,9 +11,9 @@ public class NetworkReceiver implements Runnable {
 
 	private final Networker networker;
 	
-	NetworkReceiver(Networker networker, int packetWindow) {
+	NetworkReceiver(Networker networker) {
 		this.networker = networker;
-		inputData = new byte[packetWindow];
+		inputData = new byte[NetworkProtocols.PACKET_SIZE + NetworkProtocols.HEADER_SIZE];
 	}
 
 	/** packet buffer **/
@@ -53,10 +53,14 @@ public class NetworkReceiver implements Runnable {
 		byte packetType = header[NetworkProtocols.OCTAL_PKT_TYPE];
 		NetworkPeer peer = networker.getPeer(header[NetworkProtocols.OCTAL_PEER_ID]);
 		
-		if(networker.getId() == NetworkProtocols.SERVER_ID){
-			readAsServer(packetType, rawData, header, data, packet, peer);
-		}else{
-			readAsClient(packetType, rawData, header, data, packet, peer);
+		// if the packet is relevant to the internal network system, read it.
+		// packets that are created by the user (type_raw) should be send directly to the next layer.
+		if(packetType != NetworkProtocols.TYPE_RAW){
+			if(networker.getId() == NetworkProtocols.SERVER_ID){
+				readAsServer(packetType, rawData, header, data, packet, peer);
+			}else{
+				readAsClient(packetType, rawData, header, data, packet, peer);
+			}
 		}
 		
 		NetworkPacket np = new NetworkPacket(packet, peer, header, data);
@@ -93,7 +97,7 @@ public class NetworkReceiver implements Runnable {
 	private void readAsServer(byte packetType, byte[] rawData, byte[] header, byte[] data, DatagramPacket packet, NetworkPeer peer){
 		switch(packetType){
 			case NetworkProtocols.TYPE_HELLO:
-				PacketHello ph = PacketHello.load(data, packet);
+				PacketHello ph = PacketHello.read(data, packet);
 				ph.me.id = networker.getFreeId();
 				networker.addPeer(ph.me);
 				networker.sender.send(PacketHello.getHeader(), ph.getData(), ph.me);
@@ -104,7 +108,7 @@ public class NetworkReceiver implements Runnable {
 	private void readAsClient(byte packetType, byte[] rawData, byte[] header, byte[] data, DatagramPacket packet, NetworkPeer peer){
 		switch(packetType){
 			case NetworkProtocols.TYPE_HELLO:
-				PacketHello ph = PacketHello.load(data, packet);
+				PacketHello ph = PacketHello.read(data, packet);
 				networker.id = ph.me.id;
 				break;
 		}

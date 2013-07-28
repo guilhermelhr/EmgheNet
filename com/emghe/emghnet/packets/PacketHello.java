@@ -12,7 +12,15 @@ public class PacketHello {
 	
 	public NetworkPeer me; 
 	
-	public static PacketHello load(byte[] data, DatagramPacket packet){
+	public static PacketHello create(Networker networker){
+		PacketHello hello = new PacketHello();
+		hello.me = new NetworkPeer();
+		hello.me.id = networker.getId();
+		hello.me.listenPort = networker.getListenPort();
+		return hello;
+	}
+	
+	public static PacketHello read(byte[] data, DatagramPacket packet){
 		PacketHello hello = new PacketHello();
 		hello.me = new NetworkPeer();
 		hello.me.id = data[ID];
@@ -23,14 +31,6 @@ public class PacketHello {
 		listenPort |= (data[LISTEN_PORT + 2] & 0xFF) << 16;
 		listenPort |= (data[LISTEN_PORT + 3] & 0xFF) << 24;
 		hello.me.listenPort = listenPort;
-		return hello;
-	}
-	
-	public static PacketHello create(Networker networker){
-		PacketHello hello = new PacketHello();
-		hello.me = new NetworkPeer();
-		hello.me.id = networker.getId();
-		hello.me.listenPort = networker.getListenPort();
 		return hello;
 	}
 	

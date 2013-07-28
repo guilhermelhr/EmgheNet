@@ -5,8 +5,10 @@ import java.net.DatagramSocket;
 import java.util.LinkedList;
 
 public abstract class Networker {
-	// NEW_CLIENT_ID is interpreted by the server as a new client waiting to receive an unique id
-	// SERVER_ID is the server unique id
+	/** 
+	 * NEW_CLIENT_ID is interpreted by the server as a new client waiting to receive an unique id.
+	 * SERVER_ID is the server unique id.
+	 **/
 	protected byte id = NetworkProtocols.NEW_CLIENT_ID;	
 	
 	protected DatagramSocket receiverSocket;
@@ -15,10 +17,19 @@ public abstract class Networker {
 	public NetworkReceiver receiver;
 	public NetworkSender sender;
 	
-	private int packetWindow = 128;
-	
+	/**
+	 * Stores the peers (other networkers) known by this networker.
+	 * Usually, the clients will only know about the server
+	 * and the server will know about all clients.
+	 */
 	private LinkedList<NetworkPeer> peers;
 	
+	/**
+	 * Creates a networker. It is made of two sockets, the {@link #receiverSocket} and the {@link #senderSocket}
+	 * that are managed by {@link #receiver} and {@link #sender}.
+	 * You may specify through {@link #id} the role it should take (client or server).
+	 * @param listenPort
+	 */
 	public Networker(int listenPort){
 		peers = new LinkedList<NetworkPeer>();
 		try {
@@ -68,6 +79,10 @@ public abstract class Networker {
 		return null;
 	}
 	
+	public int getPeersSize(){
+		return peers.size();
+	}
+	
 	public synchronized NetworkPeer loadPeer(byte id, NetworkPeer target){
 		NetworkPeer peer = getPeer(id);
 		if(peer != null){
@@ -96,12 +111,12 @@ public abstract class Networker {
 	
 	public void run(){
 		if(receiver != null) receiver.stop();
-		receiver = new NetworkReceiver(this, packetWindow);
+		receiver = new NetworkReceiver(this);
 		System.out.println("Networker: starting receiver");
 		Thread tr = new Thread(receiver);
 		tr.start();
 		System.out.println("Networker: starting sender");
-		sender = new NetworkSender(this, packetWindow);
+		sender = new NetworkSender(this);
 		Thread ts = new Thread(sender);
 		ts.start();
 		System.out.println("Networker: network is now running");

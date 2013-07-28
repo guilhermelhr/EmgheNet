@@ -10,9 +10,9 @@ import com.emghe.emghnet.packets.PacketHello;
 public class NetworkSender implements Runnable{
 	private final Networker networker;
 	
-	public NetworkSender(Networker networker, int packetWindow){
+	public NetworkSender(Networker networker){
 		this.networker = networker;
-		outputData = new byte[packetWindow + NetworkProtocols.HEADER_SIZE];//define window as data window size + header size
+		outputData = new byte[NetworkProtocols.PACKET_SIZE + NetworkProtocols.HEADER_SIZE];//define packet size as data size + header size
 		
 		if(networker.getId() == NetworkProtocols.NEW_CLIENT_ID){ // send hello to server as soon as we start the client
 			PacketHello hello = PacketHello.create(networker);
@@ -52,7 +52,7 @@ public class NetworkSender implements Runnable{
 		send(Networker.createEmptyHeader(), rawData, peer);
 	}
 	
-	/** Be aware: do not exceed {@link #outputData} length (packetWindow) otherwise packet will be dropped! **/
+	/** Be aware: do not exceed {@link #outputData} size (packet size) otherwise packet will be dropped! **/
 	public void send(byte[] header, byte[] rawData, NetworkPeer peer){			
 		if(rawData.length > outputData.length - NetworkProtocols.HEADER_SIZE){
 			assert false;
@@ -72,7 +72,12 @@ public class NetworkSender implements Runnable{
 		}
 	}
 	
+	/** 
+	 * This is where the target peer is loaded using the id found in the current packet <br> 
+	 * The object is always the same, only the properties of it change. That's for (little) performance reasons.
+	 **/
 	NetworkPeer peer = new NetworkPeer();
+	
 	@Override
 	public void run() {
 		while(isRunning()){

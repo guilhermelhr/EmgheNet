@@ -6,4 +6,5 @@ public class NetworkPeer {
 	public byte id;
 	public InetAddress address;
 	public int listenPort;
+	public int packetSize;
 }

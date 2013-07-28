@@ -5,8 +5,8 @@ import java.net.DatagramPacket;
 public class NetworkPacket {
 	private DatagramPacket packet;
 	private NetworkPeer peer;
-	private byte[] data;
 	private byte[] header;
+	private byte[] data;
 	
 	public NetworkPacket(DatagramPacket packet, NetworkPeer peer, byte[] header, byte[] data){
 		this.packet = packet;
@@ -19,18 +19,19 @@ public class NetworkPacket {
 		return packet;
 	}
 	
-	public byte[] getData(){
-		return data;
-	}
-	
 	public byte[] getHeader(){
 		return header;
+	}
+	
+	public byte[] getData(){
+		return data;
 	}
 	
 	public NetworkPeer getPeer(){
 		return peer;
 	}
 	
+	/** String representation of the packet, basically a high level packet dump **/
 	@Override
 	public String toString(){
 		String h = "";
