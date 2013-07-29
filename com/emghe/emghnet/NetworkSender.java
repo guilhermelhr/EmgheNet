@@ -10,6 +10,10 @@ import com.emghe.emghnet.packets.PacketHello;
 public class NetworkSender implements Runnable{
 	private final Networker networker;
 	
+	private int packetsSent = 0;	
+	private double lastCalc = System.currentTimeMillis();
+	private float bps = 0f;
+	
 	public NetworkSender(Networker networker){
 		this.networker = networker;
 		outputData = new byte[NetworkProtocols.PACKET_SIZE + NetworkProtocols.HEADER_SIZE];//define packet size as data size + header size
@@ -53,10 +57,10 @@ public class NetworkSender implements Runnable{
 	}
 	
 	/** Be aware: do not exceed {@link #outputData} size (packet size) otherwise packet will be dropped! **/
-	public void send(byte[] header, byte[] rawData, NetworkPeer peer){			
+	public boolean send(byte[] header, byte[] rawData, NetworkPeer peer){			
 		if(rawData.length > outputData.length - NetworkProtocols.HEADER_SIZE){
 			assert false;
-		}else{
+		}else if(peer != null){
 			byte[] data = new byte[outputData.length];
 			for(int i = 0; i < rawData.length; i++){
 				data[i + NetworkProtocols.HEADER_SIZE] = rawData[i];					
@@ -69,7 +73,9 @@ public class NetworkSender implements Runnable{
 			}
 			data[NetworkProtocols.OCTAL_PEER_ID] = peer.id;
 			this.add(data);
+			return true;
 		}
+		return false;
 	}
 	
 	/** 
@@ -81,6 +87,8 @@ public class NetworkSender implements Runnable{
 	@Override
 	public void run() {
 		while(isRunning()){
+			calculateSpeed();
+			
 			byte[] data = this.pop();
 			 
 			if(data != null){
@@ -91,18 +99,35 @@ public class NetworkSender implements Runnable{
 				
 				networker.loadPeer(outputData[NetworkProtocols.OCTAL_PEER_ID], peer);
 				
-				DatagramPacket sendPacket = new DatagramPacket(outputData, outputData.length, peer.address, peer.listenPort);
+				DatagramPacket sentPacket = new DatagramPacket(outputData, outputData.length, peer.address, peer.listenPort);
 				
 				try {
-					networker.senderSocket.send(sendPacket);
+					networker.senderSocket.send(sentPacket);
+					packetsSent++;
+					networker.packetSent(sentPacket, outputData, peer);
 				} catch (IOException e) {
-					System.err.println("NetworkSender: socket exception");
 					e.printStackTrace();
+					System.err.println("NetworkSender: socket exception");
+					System.out.println("NetworkSender: packet destination: " + peer.toString());
 					System.out.println("NetworkSender: packet data: " + new String(outputData));
 				}
 			}
 		}
 		networker.senderSocket.close();
 		System.out.println("NetworkSender: processor quited");
+	}
+	
+	public float getBps(){
+		return bps;
+	}
+	
+	private void calculateSpeed(){
+		float delta = (float) (System.currentTimeMillis() - lastCalc);
+		if(delta >= 4000f){
+			bps = (packetsSent * outputData.length) / (delta / 1000f);
+			
+			lastCalc = System.currentTimeMillis();
+			packetsSent = 0;
+		}
 	}
 }

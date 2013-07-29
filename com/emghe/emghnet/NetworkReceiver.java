@@ -23,6 +23,10 @@ public class NetworkReceiver implements Runnable {
 			
 	private boolean running = true;
 	
+	private int packetsReceived = 0;	
+	private double lastCalc = System.currentTimeMillis();
+	private float bps = 0f;
+	
 	public synchronized boolean isRunning(){
 		return running;
 	}
@@ -75,8 +79,12 @@ public class NetworkReceiver implements Runnable {
 		try {
 			DatagramPacket received = new DatagramPacket(inputData, inputData.length);
 			networker.receiverSocket.receive(received);
-					
+			
+			packetsReceived++;
+			
 			this.add(received);
+			
+			networker.packetReceived();
 	
 		} catch (IOException e) {
 			System.err.println("NetworkReceiver: socket exception");
@@ -88,6 +96,7 @@ public class NetworkReceiver implements Runnable {
 	@Override
 	public void run() {
 		while(isRunning()){
+			calculateSpeed();
 			process();			
 		}
 		networker.receiverSocket.close();
@@ -98,9 +107,12 @@ public class NetworkReceiver implements Runnable {
 		switch(packetType){
 			case NetworkProtocols.TYPE_HELLO:
 				PacketHello ph = PacketHello.read(data, packet);
-				ph.me.id = networker.getFreeId();
-				networker.addPeer(ph.me);
-				networker.sender.send(PacketHello.getHeader(), ph.getData(), ph.me);
+				peer = new NetworkPeer();
+				ph.id = peer.id = networker.getFreeId();
+				peer.address = packet.getAddress();
+				peer.listenPort = ph.listenPort;
+				networker.addPeer(peer);
+				networker.sender.send(PacketHello.getHeader(), ph.getData(), peer);
 				break;
 		}
 	}
@@ -109,8 +121,23 @@ public class NetworkReceiver implements Runnable {
 		switch(packetType){
 			case NetworkProtocols.TYPE_HELLO:
 				PacketHello ph = PacketHello.read(data, packet);
-				networker.id = ph.me.id;
+				networker.id = ph.id;
 				break;
+		}
+	}
+	
+	public float getBps(){
+		calculateSpeed();
+		return bps;
+	}
+	
+	private void calculateSpeed(){
+		float delta = (float) (System.currentTimeMillis() - lastCalc);
+		if(delta >= 1000f){
+			bps = (packetsReceived* inputData.length) / (delta / 1000f);
+			
+			lastCalc = System.currentTimeMillis();
+			packetsReceived = 0;
 		}
 	}
 }

@@ -1,36 +1,36 @@
 package com.emghe.emghnet.packets;
 
 import java.net.DatagramPacket;
+import java.net.InetAddress;
 
-import com.emghe.emghnet.NetworkPeer;
 import com.emghe.emghnet.NetworkProtocols;
 import com.emghe.emghnet.Networker;
 
 public class PacketHello {
 	
-	private static final byte ID = 0, LISTEN_PORT = 1;
+	private static final byte OCTAL_ID = 0, OCTAL_LISTEN_PORT = 1;
 	
-	public NetworkPeer me; 
+	public InetAddress address;
+	public byte id;
+	public int listenPort;
 	
 	public static PacketHello create(Networker networker){
 		PacketHello hello = new PacketHello();
-		hello.me = new NetworkPeer();
-		hello.me.id = networker.getId();
-		hello.me.listenPort = networker.getListenPort();
+		hello.id = networker.getId();
+		hello.listenPort = networker.getListenPort();
 		return hello;
 	}
 	
 	public static PacketHello read(byte[] data, DatagramPacket packet){
 		PacketHello hello = new PacketHello();
-		hello.me = new NetworkPeer();
-		hello.me.id = data[ID];
-		hello.me.address = packet.getAddress();
+		hello.id = data[OCTAL_ID];
+		hello.address = packet.getAddress();
 		int listenPort = 0;
-		listenPort |= data[LISTEN_PORT] & 0xFF;
-		listenPort |= (data[LISTEN_PORT + 1] & 0xFF) << 8;
-		listenPort |= (data[LISTEN_PORT + 2] & 0xFF) << 16;
-		listenPort |= (data[LISTEN_PORT + 3] & 0xFF) << 24;
-		hello.me.listenPort = listenPort;
+		listenPort |= data[OCTAL_LISTEN_PORT] & 0xFF;
+		listenPort |= (data[OCTAL_LISTEN_PORT + 1] & 0xFF) << 8;
+		listenPort |= (data[OCTAL_LISTEN_PORT + 2] & 0xFF) << 16;
+		listenPort |= (data[OCTAL_LISTEN_PORT + 3] & 0xFF) << 24;
+		hello.listenPort = listenPort;
 		return hello;
 	}
 	
@@ -42,11 +42,11 @@ public class PacketHello {
 	
 	public byte[] getData(){
 		byte[] hello = new byte[5];
-		hello[ID] = me.id;
-		hello[LISTEN_PORT] = (byte) (me.listenPort & 0xFF);
-		hello[LISTEN_PORT + 1] = (byte) ((me.listenPort >> 8)  & 0xFF);
-		hello[LISTEN_PORT + 2] = (byte) ((me.listenPort >> 16) & 0xFF);
-		hello[LISTEN_PORT + 3] = (byte) ((me.listenPort >> 24) & 0xFF);
+		hello[OCTAL_ID] = id;
+		hello[OCTAL_LISTEN_PORT] = (byte) (listenPort & 0xFF);
+		hello[OCTAL_LISTEN_PORT + 1] = (byte) ((listenPort >> 8)  & 0xFF);
+		hello[OCTAL_LISTEN_PORT + 2] = (byte) ((listenPort >> 16) & 0xFF);
+		hello[OCTAL_LISTEN_PORT + 3] = (byte) ((listenPort >> 24) & 0xFF);
 		return hello;
 	}
 	

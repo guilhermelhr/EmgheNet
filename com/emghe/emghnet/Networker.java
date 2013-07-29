@@ -1,6 +1,8 @@
 package com.emghe.emghnet;
 
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.util.LinkedList;
 
@@ -16,6 +18,11 @@ public abstract class Networker {
 	
 	public NetworkReceiver receiver;
 	public NetworkSender sender;
+	
+	protected NetworkEventListener listener;
+	public void registerListener(NetworkEventListener listener){
+		this.listener = listener;
+	}
 	
 	/**
 	 * Stores the peers (other networkers) known by this networker.
@@ -45,14 +52,48 @@ public abstract class Networker {
 		}
 	}
 	
+	/** 
+	 * @param data bytes to be sent
+	 * @param targetId who will it be sent to
+	 * @return was it sent successfully sent to be processed (doesn't mean it was sent) 
+	 */
+	public boolean sendData(byte[] data, byte targetId){
+		return sender.send(Networker.createEmptyHeader(), data, getPeer(targetId));
+	}
+	
+	public boolean sendData(String data, byte targetId){
+		try {
+			return sendData(data.getBytes(NetworkProtocols.STR_ENCODING), targetId);
+		} catch (UnsupportedEncodingException e) {
+			e.printStackTrace();
+			return false;
+		}
+	}
+	
+	public void packetReceived(){
+		if(listener != null){
+			NetworkPacket packet;
+			while((packet = receiver.pop()) != null){
+				listener.onPacketReceived(packet);
+			}
+		}
+	}
+	
+	public void packetSent(DatagramPacket packet, byte[] rawData, NetworkPeer peer){
+		if(listener != null){
+			NetworkPacket np = new NetworkPacket(packet, peer, rawData);
+			listener.onPacketSent(np);
+		}
+	}
+	
 	public byte getFreeId(){
-		byte id = (byte) 253;
+		byte id = (byte) 0;
 		do{
 			if(getPeer(id) == null){
 				break;
 			}
-			id--;
-		}while(id > 0);
+			id++;
+		}while(id < 253);
 		return id;
 	}
 	
@@ -64,6 +105,9 @@ public abstract class Networker {
 	
 	public synchronized void addPeer(NetworkPeer peer){
 		peers.add(peer);
+		if(listener != null){
+			listener.onConnect(peer);
+		}
 	}
 	
 	public synchronized void removePeer(NetworkPeer peer){
@@ -112,10 +156,10 @@ public abstract class Networker {
 	public void run(){
 		if(receiver != null) receiver.stop();
 		receiver = new NetworkReceiver(this);
-		System.out.println("Networker: starting receiver");
+		System.out.println("Networker: starting receiver on port " + receiverSocket.getLocalPort());
 		Thread tr = new Thread(receiver);
 		tr.start();
-		System.out.println("Networker: starting sender");
+		System.out.println("Networker: starting sender on port " + senderSocket.getLocalPort());
 		sender = new NetworkSender(this);
 		Thread ts = new Thread(sender);
 		ts.start();

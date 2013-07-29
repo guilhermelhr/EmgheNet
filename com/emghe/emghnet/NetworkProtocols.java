@@ -12,13 +12,18 @@ public class NetworkProtocols {
 	 * If you exceed the specified size, the packet will be dropped and
 	 * there will be an assert notification. </p>
 	 */
-	public static final int PACKET_SIZE = 128;
+	public static final int PACKET_SIZE = 32;
 	
 	/**
 	 * Pretty much the same as {@link #PACKET_SIZE}, but for the header. <br>
 	 * The real size of the packet will be {@link #HEADER_SIZE} + {@link #PACKET_SIZE}
 	 */
 	public static final int HEADER_SIZE = 3;
+	
+	/**
+	 * Encoding used for String to byte[] conversion
+	 */
+	public static final String STR_ENCODING = "UTF-8";
 	
 	public static final byte
 	/** packet octals **/
