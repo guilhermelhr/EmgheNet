@@ -11,6 +11,6 @@ public class NetworkPeer {
 	@Override
 	public String toString(){
 		return String.format("NetworkPeer{id: %d, address: %s, port: %d, packet size: %d", 
-											id, address.getHostAddress(), listenPort, packetSize);
+											id & 0xFF, address.getHostAddress(), listenPort, packetSize);
 	}
 }

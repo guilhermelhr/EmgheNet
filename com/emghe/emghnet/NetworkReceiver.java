@@ -2,6 +2,8 @@ package com.emghe.emghnet;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.SocketException;
 import java.util.LinkedList;
 import java.util.NoSuchElementException;
 
@@ -10,10 +12,27 @@ import com.emghe.emghnet.packets.PacketHello;
 public class NetworkReceiver implements Runnable {
 
 	private final Networker networker;
+	protected DatagramSocket socket;
+	private ThroughputMeter meter;
 	
-	NetworkReceiver(Networker networker) {
+	NetworkReceiver(Networker networker, int listenPort) {
 		this.networker = networker;
-		inputData = new byte[NetworkProtocols.PACKET_SIZE + NetworkProtocols.HEADER_SIZE];
+		meter = new ThroughputMeter();
+		try {
+			if(listenPort == -1){
+				socket = new DatagramSocket();
+			}else{
+				socket = new DatagramSocket(listenPort);
+			}
+		} catch (SocketException e) {
+			System.err.println(String.format("Could not start receiver socket on port %d", listenPort));
+			e.printStackTrace();
+		}
+		inputData = new byte[NetworkProtocols.PACKET_TOTAL_SIZE];
+	}
+	
+	public ThroughputMeter getThroughputMeter(){
+		return meter;
 	}
 
 	/** packet buffer **/
@@ -22,10 +41,6 @@ public class NetworkReceiver implements Runnable {
 	private byte[] inputData;
 			
 	private boolean running = true;
-	
-	private int packetsReceived = 0;	
-	private double lastCalc = System.currentTimeMillis();
-	private float bps = 0f;
 	
 	public synchronized boolean isRunning(){
 		return running;
@@ -42,18 +57,11 @@ public class NetworkReceiver implements Runnable {
 		}catch(NoSuchElementException e){
 			return null;
 		}
+		
 		byte[] rawData = packet.getData();
-		
-		byte[] header = new byte[NetworkProtocols.HEADER_SIZE];
-		for(int i = 0; i < header.length; i++){
-			header[i] = rawData[i];
-		}
-		
-		byte[] data = new byte[rawData.length - NetworkProtocols.HEADER_SIZE];
-		for(int i = 0; i < data.length; i++){
-			data[i] = rawData[i + NetworkProtocols.HEADER_SIZE];
-		}
-		
+		byte[] header = NetworkPacket.readHeader(rawData);
+		byte[] data = NetworkPacket.removeHeader(rawData);
+				
 		byte packetType = header[NetworkProtocols.OCTAL_PKT_TYPE];
 		NetworkPeer peer = networker.getPeer(header[NetworkProtocols.OCTAL_PEER_ID]);
 		
@@ -78,9 +86,9 @@ public class NetworkReceiver implements Runnable {
 	public void process(){
 		try {
 			DatagramPacket received = new DatagramPacket(inputData, inputData.length);
-			networker.receiverSocket.receive(received);
+			socket.receive(received);
 			
-			packetsReceived++;
+			meter.packetProcessed(inputData.length);
 			
 			this.add(received);
 			
@@ -96,10 +104,10 @@ public class NetworkReceiver implements Runnable {
 	@Override
 	public void run() {
 		while(isRunning()){
-			calculateSpeed();
+			meter.tick();
 			process();			
 		}
-		networker.receiverSocket.close();
+		socket.close();
 		System.out.println("NetworkReceiver: processor quited");
 	}
 	
@@ -123,21 +131,6 @@ public class NetworkReceiver implements Runnable {
 				PacketHello ph = PacketHello.read(data, packet);
 				networker.id = ph.id;
 				break;
-		}
-	}
-	
-	public float getBps(){
-		calculateSpeed();
-		return bps;
-	}
-	
-	private void calculateSpeed(){
-		float delta = (float) (System.currentTimeMillis() - lastCalc);
-		if(delta >= 1000f){
-			bps = (packetsReceived* inputData.length) / (delta / 1000f);
-			
-			lastCalc = System.currentTimeMillis();
-			packetsReceived = 0;
 		}
 	}
 }

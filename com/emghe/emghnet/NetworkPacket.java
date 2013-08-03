@@ -4,6 +4,23 @@ import java.io.UnsupportedEncodingException;
 import java.net.DatagramPacket;
 
 public class NetworkPacket {
+	
+	public static byte[] readHeader(byte[] rawData){
+		byte[] header = new byte[NetworkProtocols.HEADER_SIZE];
+		for(int i = 0; i < header.length; i++)
+			header[i] = rawData[i];
+		
+		return header;
+	}
+	
+	public static byte[] removeHeader(byte[] rawData){
+		byte[] data = new byte[rawData.length - NetworkProtocols.HEADER_SIZE];
+		for(int i = 0; i < data.length; i++)
+			data[i] = rawData[i + NetworkProtocols.HEADER_SIZE];
+		
+		return data;
+	}
+	
 	private DatagramPacket packet;
 	private NetworkPeer peer;
 	private byte[] header;
@@ -19,14 +36,8 @@ public class NetworkPacket {
 	public NetworkPacket(DatagramPacket packet, NetworkPeer peer, byte[] rawData){
 		this.packet = packet;
 		this.peer = peer;
-		header = new byte[NetworkProtocols.HEADER_SIZE];
-		for(int i = 0; i < header.length; i++){
-			header[i] = rawData[i];
-		}
-		data = new byte[rawData.length - header.length];
-		for(int i = 0; i < data.length; i++){
-			data[i] = rawData[i + header.length];
-		}
+		header = readHeader(rawData);
+		data = removeHeader(rawData);
 	}
 	
 	public DatagramPacket getPacket(){

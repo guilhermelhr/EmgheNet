@@ -2,26 +2,39 @@ package com.emghe.emghnet;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.SocketException;
 import java.util.LinkedList;
 import java.util.NoSuchElementException;
 
 import com.emghe.emghnet.packets.PacketHello;
 
 public class NetworkSender implements Runnable{
+	
 	private final Networker networker;
-	
-	private int packetsSent = 0;	
-	private double lastCalc = System.currentTimeMillis();
-	private float bps = 0f;
-	
+	protected DatagramSocket socket;
+	private ThroughputMeter meter;
+		
 	public NetworkSender(Networker networker){
 		this.networker = networker;
-		outputData = new byte[NetworkProtocols.PACKET_SIZE + NetworkProtocols.HEADER_SIZE];//define packet size as data size + header size
+		meter = new ThroughputMeter();
+		try {
+			socket = new DatagramSocket();
+		} catch (SocketException e) {
+			System.err.println("Could not start sender socket");
+			e.printStackTrace();
+		}
 		
-		if(networker.getId() == NetworkProtocols.NEW_CLIENT_ID){ // send hello to server as soon as we start the client
+		outputData = new byte[NetworkProtocols.PACKET_TOTAL_SIZE];//define packet size as data size + header size
+		
+		if(networker.isNewClient()){ // send hello to server as soon as we start the client
 			PacketHello hello = PacketHello.create(networker);
 			this.send(PacketHello.getHeader(), hello.getData(), networker.getServer());
 		}
+	}
+	
+	public ThroughputMeter getThroughputMeter(){
+		return meter;
 	}
 	
 	private LinkedList<byte[]> toBeSent = new LinkedList<byte[]>();
@@ -87,7 +100,7 @@ public class NetworkSender implements Runnable{
 	@Override
 	public void run() {
 		while(isRunning()){
-			calculateSpeed();
+			meter.tick();
 			
 			byte[] data = this.pop();
 			 
@@ -98,12 +111,18 @@ public class NetworkSender implements Runnable{
 				outputData[NetworkProtocols.OCTAL_SELF_ID] = networker.getId();
 				
 				networker.loadPeer(outputData[NetworkProtocols.OCTAL_PEER_ID], peer);
-				
-				DatagramPacket sentPacket = new DatagramPacket(outputData, outputData.length, peer.address, peer.listenPort);
+				DatagramPacket sentPacket = null;
+				try{
+					sentPacket = new DatagramPacket(outputData, outputData.length, peer.address, peer.listenPort);
+				}catch(IllegalArgumentException ex){
+					System.out.println(peer.listenPort);
+					System.exit(-1);
+					return;
+				}
 				
 				try {
-					networker.senderSocket.send(sentPacket);
-					packetsSent++;
+					socket.send(sentPacket);
+					meter.packetProcessed(outputData.length);
 					networker.packetSent(sentPacket, outputData, peer);
 				} catch (IOException e) {
 					e.printStackTrace();
@@ -113,21 +132,7 @@ public class NetworkSender implements Runnable{
 				}
 			}
 		}
-		networker.senderSocket.close();
+		socket.close();
 		System.out.println("NetworkSender: processor quited");
-	}
-	
-	public float getBps(){
-		return bps;
-	}
-	
-	private void calculateSpeed(){
-		float delta = (float) (System.currentTimeMillis() - lastCalc);
-		if(delta >= 4000f){
-			bps = (packetsSent * outputData.length) / (delta / 1000f);
-			
-			lastCalc = System.currentTimeMillis();
-			packetsSent = 0;
-		}
 	}
 }

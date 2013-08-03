@@ -1,9 +1,7 @@
 package com.emghe.emghnet;
 
-import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.DatagramPacket;
-import java.net.DatagramSocket;
 import java.util.LinkedList;
 
 public abstract class Networker {
@@ -13,11 +11,10 @@ public abstract class Networker {
 	 **/
 	protected byte id = NetworkProtocols.NEW_CLIENT_ID;	
 	
-	protected DatagramSocket receiverSocket;
-	protected DatagramSocket senderSocket;
-	
 	public NetworkReceiver receiver;
 	public NetworkSender sender;
+	
+	private int listenPort;
 	
 	protected NetworkEventListener listener;
 	public void registerListener(NetworkEventListener listener){
@@ -38,18 +35,8 @@ public abstract class Networker {
 	 * @param listenPort
 	 */
 	public Networker(int listenPort){
+		this.listenPort = listenPort; 
 		peers = new LinkedList<NetworkPeer>();
-		try {
-			if(listenPort == -1){
-				receiverSocket = new DatagramSocket();
-			}else{
-				receiverSocket = new DatagramSocket(listenPort);
-			}
-			senderSocket = new DatagramSocket();
-		}catch (IOException e){
-			System.err.println(String.format("Could not start socket on port %d", listenPort));
-			e.printStackTrace();
-		}
 	}
 	
 	/** 
@@ -87,14 +74,13 @@ public abstract class Networker {
 	}
 	
 	public byte getFreeId(){
-		byte id = (byte) 0;
-		do{
-			if(getPeer(id) == null){
+		int id;
+		for(id = 0; id < 253; id++){
+			if(getPeer((byte) (id)) == null){
 				break;
 			}
-			id++;
-		}while(id < 253);
-		return id;
+		}
+		return (byte) (id);
 	}
 	
 	public static byte[] createEmptyHeader(){
@@ -146,21 +132,30 @@ public abstract class Networker {
 	}
 	
 	public int getListenPort(){
-		return receiverSocket.getLocalPort();
+		return listenPort;
 	}
 	
 	public byte getId(){
 		return id;
 	}
 	
+	public boolean isNewClient(){
+		return id == NetworkProtocols.NEW_CLIENT_ID;
+	}
+	
+	public boolean isServer(){
+		return id == NetworkProtocols.SERVER_ID;
+	}
+	
 	public void run(){
 		if(receiver != null) receiver.stop();
-		receiver = new NetworkReceiver(this);
-		System.out.println("Networker: starting receiver on port " + receiverSocket.getLocalPort());
+		receiver = new NetworkReceiver(this, listenPort);
+		listenPort = receiver.socket.getLocalPort();
+		System.out.println("Networker: starting receiver socket on port " + listenPort);
 		Thread tr = new Thread(receiver);
 		tr.start();
-		System.out.println("Networker: starting sender on port " + senderSocket.getLocalPort());
 		sender = new NetworkSender(this);
+		System.out.println("Networker: starting sender socket on port " + sender.socket.getLocalPort());
 		Thread ts = new Thread(sender);
 		ts.start();
 		System.out.println("Networker: network is now running");

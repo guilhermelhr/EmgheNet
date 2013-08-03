@@ -20,6 +20,8 @@ public class NetworkProtocols {
 	 */
 	public static final int HEADER_SIZE = 3;
 	
+	public static final int PACKET_TOTAL_SIZE = PACKET_SIZE + HEADER_SIZE;
+	
 	/**
 	 * Encoding used for String to byte[] conversion
 	 */
