@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.SocketException;
+import java.nio.ByteBuffer;
 import java.util.LinkedList;
 import java.util.NoSuchElementException;
 
@@ -19,7 +20,7 @@ public class NetworkReceiver implements Runnable {
 		this.networker = networker;
 		meter = new ThroughputMeter();
 		try {
-			if(listenPort == -1){
+			if(listenPort == 0){
 				socket = new DatagramSocket();
 			}else{
 				socket = new DatagramSocket(listenPort);
@@ -50,6 +51,11 @@ public class NetworkReceiver implements Runnable {
 		running = false;
 	}
 	
+	/**
+	 * Gets the first packet on the buffer.<br>
+	 * <b>Do not call this directly</b> if you're using an event listener on your networker. It already does that for you.
+	 * @return packet or null if buffer is empty or the packet is for internal communication.
+	 */
 	public synchronized NetworkPacket pop(){
 		DatagramPacket packet;
 		try{
@@ -59,23 +65,26 @@ public class NetworkReceiver implements Runnable {
 		}
 		
 		byte[] rawData = packet.getData();
-		byte[] header = NetworkPacket.readHeader(rawData);
+		ByteBuffer header = ByteBuffer.allocate(NetworkProtocols.HEADER_SIZE);
+		header.put(NetworkPacket.swapIds(NetworkPacket.readHeader(rawData)));
 		byte[] data = NetworkPacket.removeHeader(rawData);
 				
-		byte packetType = header[NetworkProtocols.OCTAL_PKT_TYPE];
-		NetworkPeer peer = networker.getPeer(header[NetworkProtocols.OCTAL_PEER_ID]);
+		byte packetType = header.get(NetworkProtocols.OCTAL_PKT_TYPE);
+		NetworkPeer peer = networker.getPeer(header.getShort(NetworkProtocols.OCTAL_PEER_ID));
 		
 		// if the packet is relevant to the internal network system, read it.
 		// packets that are created by the user (type_raw) should be send directly to the next layer.
 		if(packetType != NetworkProtocols.TYPE_RAW){
 			if(networker.getId() == NetworkProtocols.SERVER_ID){
-				readAsServer(packetType, rawData, header, data, packet, peer);
+				readAsServer(packetType, rawData, header.array(), data, packet, peer);
 			}else{
-				readAsClient(packetType, rawData, header, data, packet, peer);
+				readAsClient(packetType, rawData, header.array(), data, packet, peer);
 			}
+			commonRead(packetType, rawData, header.array(), data, packet, peer);
+			return null;
 		}
 		
-		NetworkPacket np = new NetworkPacket(packet, peer, header, data);
+		NetworkPacket np = new NetworkPacket(packet, peer, header.array(), data);
 		return np;
 	}
 	
@@ -86,8 +95,9 @@ public class NetworkReceiver implements Runnable {
 	public void process(){
 		try {
 			DatagramPacket received = new DatagramPacket(inputData, inputData.length);
-			socket.receive(received);
 			
+			socket.receive(received);
+						
 			meter.packetProcessed(inputData.length);
 			
 			this.add(received);
@@ -111,6 +121,12 @@ public class NetworkReceiver implements Runnable {
 		System.out.println("NetworkReceiver: processor quited");
 	}
 	
+	private void commonRead(byte packetType, byte[] rawData, byte[] header, byte[] data, DatagramPacket packet, NetworkPeer peer){
+		switch (packetType) {
+		
+		}
+	}
+	
 	private void readAsServer(byte packetType, byte[] rawData, byte[] header, byte[] data, DatagramPacket packet, NetworkPeer peer){
 		switch(packetType){
 			case NetworkProtocols.TYPE_HELLO:
@@ -130,6 +146,7 @@ public class NetworkReceiver implements Runnable {
 			case NetworkProtocols.TYPE_HELLO:
 				PacketHello ph = PacketHello.read(data, packet);
 				networker.id = ph.id;
+				if(networker.eventListener != null) networker.eventListener.onConnect(peer);
 				break;
 		}
 	}

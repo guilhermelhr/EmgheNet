@@ -18,7 +18,7 @@ public class NetworkProtocols {
 	 * Pretty much the same as {@link #PACKET_SIZE}, but for the header. <br>
 	 * The real size of the packet will be {@link #HEADER_SIZE} + {@link #PACKET_SIZE}
 	 */
-	public static final int HEADER_SIZE = 3;
+	public static final int HEADER_SIZE = 5;
 	
 	public static final int PACKET_TOTAL_SIZE = PACKET_SIZE + HEADER_SIZE;
 	
@@ -29,18 +29,20 @@ public class NetworkProtocols {
 	
 	public static final byte
 	/** packet octals **/
-	OCTAL_SELF_ID 	= 0,
-	OCTAL_PEER_ID 	= 1,
-	OCTAL_PKT_TYPE	= 2,
+	OCTAL_SELF_ID 	= 0, // 2 Bytes
+	OCTAL_PEER_ID 	= 2, // 2 Bytes
+	OCTAL_PKT_TYPE	= 4, // 1 Byte
 	/*******************/
 	
 	/** packet types **/
 	TYPE_RAW			= 0,
-	TYPE_HELLO 			= 1,
+	TYPE_HELLO 			= 1;
 	/******************/
-	
+
+	public static final short
 	/** ids **/
-	SERVER_ID 			= (byte) 255,
-	NEW_CLIENT_ID 		= (byte) 254;
+	INVALID_ID			= (short) 253,
+	SERVER_ID 			= (short) 255,
+	NEW_CLIENT_ID 		= (short) 254;	
 	/*********/
 }

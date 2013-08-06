@@ -3,14 +3,16 @@ package com.emghe.emghnet;
 import java.net.InetAddress;
 
 public class NetworkPeer {
-	public byte id;
+	public short id;
 	public InetAddress address;
-	public int listenPort;
+	public short listenPort;
 	public int packetSize;
+	public int ping;
 	
 	@Override
 	public String toString(){
-		return String.format("NetworkPeer{id: %d, address: %s, port: %d, packet size: %d", 
-											id & 0xFF, address.getHostAddress(), listenPort, packetSize);
+		return String.format("NetworkPeer{id: %d, address: %s, port: %d, packet size: %d}", 
+											NetworkHelper.unsignShort(id), address.getHostAddress(), 
+												NetworkHelper.unsignShort(listenPort), packetSize, ping);
 	}
 }

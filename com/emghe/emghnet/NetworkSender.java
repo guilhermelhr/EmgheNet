@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.SocketException;
+import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 import java.util.LinkedList;
 import java.util.NoSuchElementException;
 
@@ -25,7 +27,7 @@ public class NetworkSender implements Runnable{
 			e.printStackTrace();
 		}
 		
-		outputData = new byte[NetworkProtocols.PACKET_TOTAL_SIZE];//define packet size as data size + header size
+		outputData = ByteBuffer.allocate(NetworkProtocols.PACKET_TOTAL_SIZE);//define packet size as data size + header size
 		
 		if(networker.isNewClient()){ // send hello to server as soon as we start the client
 			PacketHello hello = PacketHello.create(networker);
@@ -39,7 +41,7 @@ public class NetworkSender implements Runnable{
 	
 	private LinkedList<byte[]> toBeSent = new LinkedList<byte[]>();
 	
-	private byte[] outputData;
+	private ByteBuffer outputData;
 	
 	private boolean running = true;
 	
@@ -65,27 +67,31 @@ public class NetworkSender implements Runnable{
 		return data;
 	}
 	
-	public void send(byte[] rawData, NetworkPeer peer){
-		send(Networker.createEmptyHeader(), rawData, peer);
+	public boolean send(byte[] rawData, NetworkPeer peer){
+		return send(Networker.createEmptyHeader(), rawData, peer);
 	}
 	
 	/** Be aware: do not exceed {@link #outputData} size (packet size) otherwise packet will be dropped! **/
-	public boolean send(byte[] header, byte[] rawData, NetworkPeer peer){			
-		if(rawData.length > outputData.length - NetworkProtocols.HEADER_SIZE){
+	public boolean send(byte[] header, byte[] data, NetworkPeer peer){
+		String dropReason = null;
+		if(data.length > outputData.capacity() - NetworkProtocols.HEADER_SIZE) 	dropReason = "data buffer overflow";
+		if(peer.id == NetworkProtocols.INVALID_ID) 							dropReason = "invalid peer id";
+		if(header.length > NetworkProtocols.HEADER_SIZE) 					dropReason = "header buffer overflow";
+		
+		if(dropReason != null){
+			System.err.println("NetworkSender: A packet was dropped due to " + dropReason);
 			assert false;
 		}else if(peer != null){
-			byte[] data = new byte[outputData.length];
-			for(int i = 0; i < rawData.length; i++){
-				data[i + NetworkProtocols.HEADER_SIZE] = rawData[i];					
+			byte[] fHeader = new byte[NetworkProtocols.HEADER_SIZE];
+			for(int i = 0; i < fHeader.length; i++){
+				fHeader[i] = ((i < header.length)? header[i] : 0);
 			}
-			for(int i = 0; i < header.length; i++){
-				if(i >= NetworkProtocols.HEADER_SIZE){
-					break;
-				}
-				data[i] = header[i];
-			}
-			data[NetworkProtocols.OCTAL_PEER_ID] = peer.id;
-			this.add(data);
+			
+			ByteBuffer buffer = ByteBuffer.allocate(outputData.capacity());
+			buffer.put(header);
+			buffer.put(data);
+			buffer.putShort(NetworkProtocols.OCTAL_PEER_ID, peer.id);
+			this.add(buffer.array());
 			return true;
 		}
 		return false;
@@ -105,15 +111,15 @@ public class NetworkSender implements Runnable{
 			byte[] data = this.pop();
 			 
 			if(data != null){
-				for(int i = 0; i < outputData.length; i++){
-					outputData[i] = data[i];
-				}
-				outputData[NetworkProtocols.OCTAL_SELF_ID] = networker.getId();
+				outputData.clear();
+				outputData.put(data);
+				outputData.putShort(NetworkProtocols.OCTAL_SELF_ID, networker.getId());
 				
-				networker.loadPeer(outputData[NetworkProtocols.OCTAL_PEER_ID], peer);
+				networker.loadPeer(outputData.getShort(NetworkProtocols.OCTAL_PEER_ID), peer);
 				DatagramPacket sentPacket = null;
 				try{
-					sentPacket = new DatagramPacket(outputData, outputData.length, peer.address, peer.listenPort);
+					sentPacket = new DatagramPacket(outputData.array(), outputData.capacity(),
+													peer.address, NetworkHelper.unsignShort(peer.listenPort));
 				}catch(IllegalArgumentException ex){
 					System.out.println(peer.listenPort);
 					System.exit(-1);
@@ -122,14 +128,19 @@ public class NetworkSender implements Runnable{
 				
 				try {
 					socket.send(sentPacket);
-					meter.packetProcessed(outputData.length);
-					networker.packetSent(sentPacket, outputData, peer);
+					meter.packetProcessed(outputData.capacity());
+					networker.packetSent(sentPacket, outputData.array(), peer);
 				} catch (IOException e) {
 					e.printStackTrace();
 					System.err.println("NetworkSender: socket exception");
 					System.out.println("NetworkSender: packet destination: " + peer.toString());
-					System.out.println("NetworkSender: packet data: " + new String(outputData));
+					System.out.println("NetworkSender: packet data: " + 
+									new String(outputData.array(), Charset.forName(NetworkProtocols.STR_ENCODING)));
 				}
+			}else{
+				try {
+					Thread.sleep(10);
+				} catch (InterruptedException e1) {}
 			}
 		}
 		socket.close();

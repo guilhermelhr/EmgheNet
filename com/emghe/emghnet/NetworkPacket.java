@@ -2,6 +2,7 @@ package com.emghe.emghnet;
 
 import java.io.UnsupportedEncodingException;
 import java.net.DatagramPacket;
+import java.nio.ByteBuffer;
 
 public class NetworkPacket {
 	
@@ -19,6 +20,15 @@ public class NetworkPacket {
 			data[i] = rawData[i + NetworkProtocols.HEADER_SIZE];
 		
 		return data;
+	}
+	
+	public static byte[] swapIds(byte[] header){
+		ByteBuffer buffer = ByteBuffer.wrap(header);
+		short selfId = buffer.getShort(NetworkProtocols.OCTAL_SELF_ID);
+		short peerId = buffer.getShort(NetworkProtocols.OCTAL_PEER_ID);
+		buffer.putShort(NetworkProtocols.OCTAL_SELF_ID, peerId);
+		buffer.putShort(NetworkProtocols.OCTAL_PEER_ID, selfId);
+		return buffer.array();
 	}
 	
 	private DatagramPacket packet;
@@ -82,6 +92,8 @@ public class NetworkPacket {
 			d += (int) (b & 0xFF);
 			d += " ";
 		}
+		d = d.substring(0, d.length() - 1);
+		h = h.substring(0, h.length() - 1);
 		return String.format("NetworkPacket Dump...\nPacket Type: %d\nHeader: %s\nData: %s\n%s: %s", 
 										header[NetworkProtocols.OCTAL_PKT_TYPE] & 0xFF, h, d, NetworkProtocols.STR_ENCODING,this.toString());
 	}

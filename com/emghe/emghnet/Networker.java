@@ -9,16 +9,16 @@ public abstract class Networker {
 	 * NEW_CLIENT_ID is interpreted by the server as a new client waiting to receive an unique id.
 	 * SERVER_ID is the server unique id.
 	 **/
-	protected byte id = NetworkProtocols.NEW_CLIENT_ID;	
+	protected short id = NetworkProtocols.NEW_CLIENT_ID;	
 	
 	public NetworkReceiver receiver;
 	public NetworkSender sender;
 	
-	private int listenPort;
+	private short listenPort;
 	
-	protected NetworkEventListener listener;
+	protected NetworkEventListener eventListener;
 	public void registerListener(NetworkEventListener listener){
-		this.listener = listener;
+		this.eventListener = listener;
 	}
 	
 	/**
@@ -34,7 +34,7 @@ public abstract class Networker {
 	 * You may specify through {@link #id} the role it should take (client or server).
 	 * @param listenPort
 	 */
-	public Networker(int listenPort){
+	public Networker(short listenPort){
 		this.listenPort = listenPort; 
 		peers = new LinkedList<NetworkPeer>();
 	}
@@ -44,11 +44,11 @@ public abstract class Networker {
 	 * @param targetId who will it be sent to
 	 * @return was it sent successfully sent to be processed (doesn't mean it was sent) 
 	 */
-	public boolean sendData(byte[] data, byte targetId){
+	public boolean sendData(byte[] data, short targetId){
 		return sender.send(Networker.createEmptyHeader(), data, getPeer(targetId));
 	}
 	
-	public boolean sendData(String data, byte targetId){
+	public boolean sendData(String data, short targetId){
 		try {
 			return sendData(data.getBytes(NetworkProtocols.STR_ENCODING), targetId);
 		} catch (UnsupportedEncodingException e) {
@@ -58,29 +58,38 @@ public abstract class Networker {
 	}
 	
 	public void packetReceived(){
-		if(listener != null){
+		if(eventListener != null){
 			NetworkPacket packet;
 			while((packet = receiver.pop()) != null){
-				listener.onPacketReceived(packet);
+				eventListener.onPacketReceived(packet);
 			}
 		}
 	}
 	
 	public void packetSent(DatagramPacket packet, byte[] rawData, NetworkPeer peer){
-		if(listener != null){
+		if(eventListener != null){
 			NetworkPacket np = new NetworkPacket(packet, peer, rawData);
-			listener.onPacketSent(np);
+			eventListener.onPacketSent(np);
 		}
 	}
 	
-	public byte getFreeId(){
-		int id;
-		for(id = 0; id < 253; id++){
-			if(getPeer((byte) (id)) == null){
+	public short getFreeId(){
+		short id;
+		boolean found = false;
+		for(id = 0; NetworkHelper.unsignShort(id) <= 65535; id++){
+			if((id == NetworkProtocols.NEW_CLIENT_ID) || (id == NetworkProtocols.SERVER_ID) || (id == NetworkProtocols.INVALID_ID)){
+				continue;
+			}
+			if(getPeer(id) == null){
+				found = true;
 				break;
 			}
 		}
-		return (byte) (id);
+		if(!found){
+			System.err.println("Networker can't find an available id!");
+			return NetworkProtocols.INVALID_ID;
+		}
+		return id;
 	}
 	
 	public static byte[] createEmptyHeader(){
@@ -91,8 +100,8 @@ public abstract class Networker {
 	
 	public synchronized void addPeer(NetworkPeer peer){
 		peers.add(peer);
-		if(listener != null){
-			listener.onConnect(peer);
+		if(eventListener != null){
+			eventListener.onConnect(peer);
 		}
 	}
 	
@@ -100,7 +109,7 @@ public abstract class Networker {
 		peers.remove(peer);
 	}
 	
-	public synchronized NetworkPeer getPeer(byte id){
+	public synchronized NetworkPeer getPeer(short id){
 		for(NetworkPeer peer : peers){
 			if(peer.id == id){
 				return peer;
@@ -113,14 +122,14 @@ public abstract class Networker {
 		return peers.size();
 	}
 	
-	public synchronized NetworkPeer loadPeer(byte id, NetworkPeer target){
+	public synchronized NetworkPeer loadPeer(short id, NetworkPeer target){
 		NetworkPeer peer = getPeer(id);
 		if(peer != null){
 			target.id = peer.id;
 			target.address = peer.address;
 			target.listenPort = peer.listenPort;
 		}else{
-			target.id = -1;
+			target.id = NetworkProtocols.INVALID_ID;
 			target.address = null;
 			target.listenPort = 0;
 		}
@@ -131,11 +140,11 @@ public abstract class Networker {
 		return getPeer(NetworkProtocols.SERVER_ID);
 	}
 	
-	public int getListenPort(){
+	public short getListenPort(){
 		return listenPort;
 	}
 	
-	public byte getId(){
+	public short getId(){
 		return id;
 	}
 	
@@ -150,8 +159,8 @@ public abstract class Networker {
 	public void run(){
 		if(receiver != null) receiver.stop();
 		receiver = new NetworkReceiver(this, listenPort);
-		listenPort = receiver.socket.getLocalPort();
-		System.out.println("Networker: starting receiver socket on port " + listenPort);
+		listenPort = (short) receiver.socket.getLocalPort();
+		System.out.println("Networker: starting receiver socket on port " + NetworkHelper.unsignShort(listenPort));
 		Thread tr = new Thread(receiver);
 		tr.start();
 		sender = new NetworkSender(this);
